@@ -1,0 +1,4 @@
+.DS_store
+/data/index_file/*
+/data/xml_files/*
+/result/
