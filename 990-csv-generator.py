@@ -261,7 +261,7 @@ def extract_index_data(year, form_type):
     if not os.path.exists(index_csv_path):
         index_csv_path = download_index_csv(year)
     
-    index_df = pd.read_csv(index_csv_path, nrows=1000)
+    index_df = pd.read_csv(index_csv_path)
 
     # Filter the index DataFrame to include only rows with the specified form type
     index_df = index_df[index_df['RETURN_TYPE'] == form_type]
@@ -309,7 +309,7 @@ def extract_index_data(year, form_type):
     # Remove the "irs:" prefix from the column names
     combined_df.columns = [col.replace('irs:', '') for col in combined_df.columns]
 
-    output_csv_path = f'result/{year}_csv_index.csv'
+    output_csv_path = f'result/{year}/{year}_csv_index.csv'
     if not os.path.exists(os.path.dirname(output_csv_path)):
         os.makedirs(os.path.dirname(output_csv_path))
 
@@ -318,7 +318,86 @@ def extract_index_data(year, form_type):
     print(f"Data extraction completed. Output saved to {output_csv_path}.")
 
     return combined_df
-      
+
+# Function to extract recipient table from XML
+def extract_recipient_table(xml_file, object_id, recipient_variables):
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+    
+    recipient_data = []
+    recipient_elements = root.findall('.//irs:RecipientTable', ns)
+    
+    for element in recipient_elements:
+        recipient = {'OBJECT_ID': object_id}
+        for var in recipient_variables:
+            xpath_expr = var.replace('/text()', '')
+            recipient[var] = element.findtext(xpath_expr, default='', namespaces=ns)
+        recipient_data.append(recipient)
+    
+    return recipient_data
+
+def extract_recipient_data(year):
+    index_csv_path = f'data/index_file/index_{year}.csv'
+    
+    # Download the index CSV if it does not exist
+    if not os.path.exists(index_csv_path):
+        index_csv_path = download_index_csv(year)
+    
+    index_df = pd.read_csv(index_csv_path)
+
+    # Filter the index DataFrame to include only rows with the specified form type
+    index_df = index_df[index_df['RETURN_TYPE'] == '990']
+
+    all_recipient_data = []
+
+    xml_files_path_prefix = f'data/xml_files/{year}/'
+
+    if year >= 2024:
+        for index, row in index_df.iterrows():
+            xml_folder_path = f"{xml_files_path_prefix}{row['XML_BATCH_ID']}/"
+            xml_file = f"{xml_folder_path}{row['OBJECT_ID']}_public.xml"
+            
+            # Download and extract the ZIP file if the XML folder does not exist
+            if not os.path.exists(xml_folder_path):
+                download_and_extract_zip(xml_files_path_prefix, row['XML_BATCH_ID'], year)
+            
+            try:
+                recipient_data = extract_recipient_table(xml_file, row['OBJECT_ID'], recipient_variables)
+                all_recipient_data.extend(recipient_data)
+            except ET.ParseError:
+                print(f"Error parsing {xml_file}.")
+            except FileNotFoundError:
+                print(f"File {xml_file} not found.")
+    else:
+        for index, row in index_df.iterrows():
+            xml_folder_path = f"{xml_files_path_prefix}"
+            xml_file = f"{xml_folder_path}{row['OBJECT_ID']}_public.xml"
+            
+            # Download and extract the ZIP file if the XML folder does not exist
+            if not os.path.exists(xml_folder_path):
+                download_and_extract_zip_legacy(xml_files_path_prefix, year)
+            
+            try:
+                recipient_data = extract_recipient_table(xml_file, row['OBJECT_ID'], recipient_variables)
+                all_recipient_data.extend(recipient_data)
+            except ET.ParseError:
+                print(f"Error parsing {xml_file}.")
+            except FileNotFoundError:
+                print(f"File {xml_file} not found.")
+    
+    recipient_df = pd.DataFrame(all_recipient_data)
+
+    # Remove the "irs:" prefix from the column names
+    recipient_df.columns = [col.replace('irs:', '') for col in recipient_df.columns]
+
+    output_recipient_csv_path = f'result/{year}/recipient_table_{year}.csv'
+    if not os.path.exists(os.path.dirname(output_recipient_csv_path)):
+        os.makedirs(os.path.dirname(output_recipient_csv_path))
+    
+    recipient_df.to_csv(output_recipient_csv_path, index=False)
+
+    print(f"Recipient data extraction completed. Output saved to {output_recipient_csv_path}.")
+
 
 def main(year, form_type, recipient):
     if year < 2018:
@@ -327,7 +406,7 @@ def main(year, form_type, recipient):
         raise ValueError("Only form 990 is supported in this version.")
 
     if recipient:
-        pass
+        extract_recipient_data(year)
     else:
         extract_index_data(year, form_type)
 
