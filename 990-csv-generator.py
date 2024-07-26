@@ -83,6 +83,36 @@ all_variables = [
     'irs:ReturnData/irs:IRS990ScheduleI/irs:SupplementalInformationDetail/irs:ExplanationTxt',
 ]
 
+# List of variables of the recipient organization
+recipient_variables = [
+    'irs:RecipientBusinessName/irs:BusinessNameLine1',
+    'irs:RecipientBusinessName/irs:BusinessNameLine1Txt',
+    'irs:USAddress/irs:AddressLine1',
+    'irs:USAddress/irs:AddressLine1Txt',
+    'irs:USAddress/irs:City',
+    'irs:USAddress/irs:CityNm',
+    'irs:USAddress/irs:State',
+    'irs:USAddress/irs:StateAbbreviationCd',
+    'irs:USAddress/irs:ZIPCode',
+    'irs:USAddress/irs:ZIPCd',
+    'irs:RecipientEIN',
+    'irs:IRCSectionDesc',
+    'irs:CashGrantAmt',
+    'irs:NonCashAssistanceAmt',
+    'irs:ValuationMethodUsedDesc',
+    'irs:PurposeOfGrantTxt',
+    'irs:RecipientNameBusiness/irs:BusinessNameLine1',
+    'irs:AddressUS/AddressLine1',
+    'irs:AddressUS/irs:City',
+    'irs:AddressUS/irs:State',
+    'irs:AddressUS/irs:ZIPCode',
+    'irs:EINOfRecipient',
+    'irs:IRCSectionDesc',
+    'irs:AmountOfCashGrant',
+    'irs:AmountofNonCashAssistance',
+    'irs:PurposeOfGrant',
+]
+
 def download_index_csv(year):
     url = f'https://apps.irs.gov/pub/epostcard/990/xml/{year}/index_{year}.csv'
     local_path = f'data/index_file/index_{year}.csv'
@@ -223,22 +253,15 @@ def download_and_extract_zip_legacy(xml_files_path, year):
             print(f"Error extracting {local_zip_path}: {e}")
         
         print(f"Downloaded and extracted {os.path.basename(zip_url)}.")
-        
 
-def main(year, form_type):
-    if year < 2018:
-        raise ValueError("Year must be 2018 or later. IRS does not have data before 2018.")
-    if form_type != '990':
-        raise ValueError("Only form 990 is supported in this version.")
-
-
+def extract_index_data(year, form_type):
     index_csv_path = f'data/index_file/index_{year}.csv'
     
     # Download the index CSV if it does not exist
     if not os.path.exists(index_csv_path):
         index_csv_path = download_index_csv(year)
     
-    index_df = pd.read_csv(index_csv_path)
+    index_df = pd.read_csv(index_csv_path, nrows=1000)
 
     # Filter the index DataFrame to include only rows with the specified form type
     index_df = index_df[index_df['RETURN_TYPE'] == form_type]
@@ -289,16 +312,32 @@ def main(year, form_type):
     output_csv_path = f'result/{year}_csv_index.csv'
     if not os.path.exists(os.path.dirname(output_csv_path)):
         os.makedirs(os.path.dirname(output_csv_path))
-    
+
     combined_df.to_csv(output_csv_path, index=False)
 
     print(f"Data extraction completed. Output saved to {output_csv_path}.")
+
+    return combined_df
+      
+
+def main(year, form_type, recipient):
+    if year < 2018:
+        raise ValueError("Year must be 2018 or later. IRS does not have data before 2018.")
+    if form_type != '990':
+        raise ValueError("Only form 990 is supported in this version.")
+
+    if recipient:
+        pass
+    else:
+        extract_index_data(year, form_type)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract IRS form data from XML files.")
     parser.add_argument('--year', type=int, default=2024, help='The year of the data to process.')
     parser.add_argument('--form', type=str, default='990', help='The IRS form type to process.')
+    parser.add_argument('--recipient', action='store_true', default=False, help='Extract recipient organization data.')
 
     args = parser.parse_args()
 
-    main(args.year, args.form)
+    main(args.year, args.form, args.recipient)
