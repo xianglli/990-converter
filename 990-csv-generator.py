@@ -226,13 +226,19 @@ def download_and_extract_zip_legacy(xml_files_path, year):
         
 
 def main(year, form_type):
+    if year < 2018:
+        raise ValueError("Year must be 2018 or later. IRS does not have data before 2018.")
+    if form_type != '990':
+        raise ValueError("Only form 990 is supported in this version.")
+
+
     index_csv_path = f'data/index_file/index_{year}.csv'
     
     # Download the index CSV if it does not exist
     if not os.path.exists(index_csv_path):
         index_csv_path = download_index_csv(year)
     
-    index_df = pd.read_csv(index_csv_path, nrows=1000)
+    index_df = pd.read_csv(index_csv_path)
 
     # Filter the index DataFrame to include only rows with the specified form type
     index_df = index_df[index_df['RETURN_TYPE'] == form_type]
