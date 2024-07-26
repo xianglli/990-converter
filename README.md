@@ -28,7 +28,11 @@ This project extracts data from IRS Form 990 XML files, including recipient tabl
     pip install pandas requests
     ```
 
-## Usage
+
+- **Windows**: Download Python from the official website [python.org](https://www.python.org/downloads/). Run the installer and follow the instructions. Note we do not currently support Windows since we use "unzip" command.
+- **macOS**: Python 2.x is installed by default on macOS. However, you should install Python 3.x from the official website [python.org](https://www.python.org/downloads/). Alternatively, you can use Homebrew by running `brew install python3`.
+- **Linux**: Python is usually pre-installed on most Linux distributions. If not, use your package manager to install it (e.g., `sudo apt-get install python3` for Debian-based distributions).
+
 
 ### Extract Main Data
 
@@ -43,7 +47,8 @@ python your_script.py --year <YEAR> --form 990
 To extract recipient data from IRS Form 990 XML files:
 
 ```bash
-python your_script.py --year <YEAR> --recipient
+git clone https://github.com/xianglli/irs-form-990-extractor.git
+cd irs-form-990-extractor
 ```
 
 ### Example
