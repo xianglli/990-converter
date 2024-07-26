@@ -34,7 +34,7 @@ pip install requests pandas
 Download the script files from the repository. You can do this by downloading the ZIP file from the repository and extracting it to a folder on your computer, or by using `git` if you are familiar with it:
 
 ```bash
-git clone https://github.com/yourusername/irs-form-990-extractor.git
+git clone https://github.com/xianglli/irs-form-990-extractor.git
 cd irs-form-990-extractor
 ```
 
