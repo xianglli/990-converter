@@ -10,7 +10,7 @@ import subprocess
 ns = {'irs': 'http://www.irs.gov/efile'}
 
 # Function to extract variables from XML with refined XPath expressions
-def extract_variables_from_xml(xml_file, variables):
+def extract_variables_and_attr_from_xml(xml_file, variables):
     tree = ET.parse(xml_file)
     root = tree.getroot()
     
@@ -19,6 +19,9 @@ def extract_variables_from_xml(xml_file, variables):
         xpath_expr = var.replace('/text()', '')
         element = root.find(xpath_expr, ns)
         extracted_data[var] = element.text if element is not None else None
+        if element is not None:
+            for key, value in element.attrib.items():
+                extracted_data[f"{var}/{key}"] = value
     
     return extracted_data
 
@@ -28,6 +31,8 @@ all_variables = [
     'irs:ReturnHeader/irs:Filer/irs:BusinessName/irs:BusinessNameLine1Txt',
     'irs:ReturnHeader/irs:Filer/irs:BusinessName/irs:BusinessNameLine2Txt',
     'irs:ReturnHeader/irs:TaxYr',
+    'irs:ReturnData/irs:IRS990/irs:Organization501c3Ind',
+    'irs:ReturnData/irs:IRS990/irs:Organization501cInd',
     'irs:ReturnData/irs:IRS990/irs:ActivityOrMissionDesc',
     'irs:ReturnData/irs:IRS990/irs:MissionDesc',
     'irs:ReturnData/irs:IRS990/irs:Desc',
@@ -261,7 +266,7 @@ def extract_index_data(year, form_type):
     if not os.path.exists(index_csv_path):
         index_csv_path = download_index_csv(year)
     
-    index_df = pd.read_csv(index_csv_path)
+    index_df = pd.read_csv(index_csv_path, nrows= 100)
 
     # Filter the index DataFrame to include only rows with the specified form type
     index_df = index_df[index_df['RETURN_TYPE'] == form_type]
@@ -281,7 +286,7 @@ def extract_index_data(year, form_type):
                 download_and_extract_zip_legacy(xml_files_path_prefix, year)
             
             try:
-                extracted_data = extract_variables_from_xml(xml_file, all_variables)
+                extracted_data = extract_variables_and_attr_from_xml(xml_file, all_variables)
                 for var, value in extracted_data.items():
                     combined_df.at[index, var] = value
             except ET.ParseError:
@@ -298,7 +303,7 @@ def extract_index_data(year, form_type):
                 download_and_extract_zip(xml_files_path_prefix, row['XML_BATCH_ID'], year)
             
             try:
-                extracted_data = extract_variables_from_xml(xml_file, all_variables)
+                extracted_data = extract_variables_and_attr_from_xml(xml_file, all_variables)
                 for var, value in extracted_data.items():
                     combined_df.at[index, var] = value
             except ET.ParseError:
