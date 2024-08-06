@@ -3,20 +3,41 @@ import pandas as pd
 import argparse
 import os
 import requests
-import zipfile
 import subprocess
 
 # Namespace dictionary for XPath expressions
 ns = {'irs': 'http://www.irs.gov/efile'}
 
-# Function to extract variables from XML with refined XPath expressions
+# Function to read variables from a CSV file
+def read_variables_from_csv(file_path):
+    df = pd.read_csv(file_path)
+    return df['Variables'].tolist()
+
+# Load variables from CSV files without 'irs:' prefix
+all_variables_file_path = './variables/all_variables.csv'
+recipient_variables_file_path = './variables/recipient_variables.csv'
+schedule_c_variables_file_path = './variables/schedule_c_variables.csv'
+
+all_variables = read_variables_from_csv(all_variables_file_path)
+recipient_variables = read_variables_from_csv(recipient_variables_file_path)
+schedule_c_variables = read_variables_from_csv(schedule_c_variables_file_path)
+
+
 def extract_variables_and_attr_from_xml(xml_file, variables):
     tree = ET.parse(xml_file)
     root = tree.getroot()
     
     extracted_data = {}
     for var in variables:
-        xpath_expr = var.replace('/text()', '')
+        xpath_expr = var.replace('/text()', '')  
+        
+        # Split the XPath expression and prepend 'irs:' to each part
+        xpath_parts = xpath_expr.split('/')
+        # Apply the 'irs:' prefix only to the actual XML elements
+        xpath_expr = '/'.join('irs:' + part for part in xpath_parts if part)
+
+        #print(xpath_expr)  # Debugging statement to verify the XPath expression
+        
         element = root.find(xpath_expr, ns)
         extracted_data[var] = element.text if element is not None else None
         if element is not None:
@@ -25,98 +46,7 @@ def extract_variables_and_attr_from_xml(xml_file, variables):
     
     return extracted_data
 
-# List of variables to extract
-all_variables = [
-    'irs:ReturnHeader/irs:Filer/irs:EIN',
-    'irs:ReturnHeader/irs:Filer/irs:BusinessName/irs:BusinessNameLine1Txt',
-    'irs:ReturnHeader/irs:Filer/irs:BusinessName/irs:BusinessNameLine2Txt',
-    'irs:ReturnHeader/irs:TaxYr',
-    'irs:ReturnData/irs:IRS990/irs:Organization501c3Ind',
-    'irs:ReturnData/irs:IRS990/irs:Organization501cInd',
-    'irs:ReturnData/irs:IRS990/irs:ActivityOrMissionDesc',
-    'irs:ReturnData/irs:IRS990/irs:MissionDesc',
-    'irs:ReturnData/irs:IRS990/irs:Desc',
-    'irs:ReturnData/irs:IRS990/irs:ProgSrvcAccomActy2Grp/irs:Desc',
-    'irs:ReturnData/irs:IRS990/irs:ProgSrvcAccomActy3Grp/irs:Desc',
-    'irs:ReturnData/irs:IRS990/irs:ProgSrvcAccomActyOtherGrp/irs:Desc',
-    'irs:ReturnData/irs:IRS990/irs:GrantsToOrganizationsInd',
-    'irs:ReturnData/irs:IRS990/irs:GrantsToIndividualsInd',
-    'irs:ReturnData/irs:IRS990/irs:ReportProgRelInvesInd',
-    'irs:ReturnData/irs:IRS990/irs:FederatedCampaignsAmt',
-    'irs:ReturnData/irs:IRS990/irs:MembershipDuesAmt',
-    'irs:ReturnData/irs:IRS990/irs:FundraisingEventsAmt',
-    'irs:ReturnData/irs:IRS990/irs:RelatedOrganizationsAmt',
-    'irs:ReturnData/irs:IRS990/irs:GovernmentGrantsAmt',
-    'irs:ReturnData/irs:IRS990/irs:NoncashContributionsAmt',
-    'irs:ReturnData/irs:IRS990/irs:AllOtherContributionsAmt',
-    'irs:ReturnData/irs:IRS990/irs:TotalContributionsAmt',
-    'irs:ReturnData/irs:IRS990/irs:ProgramServiceRevenueGrp/irs:Desc',
-    'irs:ReturnData/irs:IRS990/irs:ProgramServiceRevenueGrp/irs:BusinessCd',
-    'irs:ReturnData/irs:IRS990/irs:ProgramServiceRevenueGrp/irs:TotalRevenueColumnAmt',
-    'irs:ReturnData/irs:IRS990/irs:ProgramServiceRevenueGrp/irs:RelatedOrExemptFuncIncomeAmt',
-    'irs:ReturnData/irs:IRS990/irs:TotalOthProgramServiceRevGrp/irs:TotalRevenueColumnAmt',
-    'irs:ReturnData/irs:IRS990/irs:TotalOthProgramServiceRevGrp/irs:RelatedOrExemptFuncIncomeAmt',
-    'irs:ReturnData/irs:IRS990/irs:TotalOthProgramServiceRevGrp/irs:UnrelatedBusinessRevenueAmt',
-    'irs:ReturnData/irs:IRS990/irs:TotalOthProgramServiceRevGrp/irs:ExclusionAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:DonorAdvisedFundsHeldCnt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:FundsAndOtherAccountsHeldCnt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:DonorAdvisedFundsContriAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:FundsAndOtherAccountsContriAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:DonorAdvisedFundsGrantsAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:FundsAndOtherAccountsGrantsAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:DonorAdvisedFundsValEOYAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:FundsAndOtherAccountsVlEOYAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:CYEndwmtFundGrp/irs:BeginningYearBalanceAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:CYEndwmtFundGrp/irs:ContributionsAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:CYEndwmtFundGrp/irs:InvestmentEarningsOrLossesAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:CYEndwmtFundGrp/irs:GrantsOrScholarshipsAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:CYEndwmtFundGrp/irs:AdministrativeExpensesAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:CYEndwmtFundGrp/irs:OtherExpendituresAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:CYEndwmtFundGrp/irs:EndYearBalanceAmt',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:BoardDesignatedBalanceEOYPct',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:PrmnntEndowmentBalanceEOYPct',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:TermEndowmentBalanceEOYPct',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:EndowmentsHeldUnrelatedOrgInd',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:EndowmentsHeldRelatedOrgInd',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:TemporarilyRestrictedEndowment',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:InvestmentsProgramRelated/irs:Description',
-    'irs:ReturnData/irs:IRS990ScheduleD/irs:InvestmentsProgramRelated/irs:BookValue',
-    'irs:ReturnData/irs:IRS990ScheduleI/irs:GrantRecordsMaintainedInd',
-    'irs:ReturnData/irs:IRS990ScheduleI/irs:Total501c3OrgCnt',
-    'irs:ReturnData/irs:IRS990ScheduleI/irs:TotalOtherOrgCnt',
-    'irs:ReturnData/irs:IRS990ScheduleI/irs:SupplementalInformationDetail/irs:FormAndLineReferenceDesc',
-    'irs:ReturnData/irs:IRS990ScheduleI/irs:SupplementalInformationDetail/irs:ExplanationTxt',
-]
 
-# List of variables of the recipient organization
-recipient_variables = [
-    'irs:RecipientBusinessName/irs:BusinessNameLine1',
-    'irs:RecipientBusinessName/irs:BusinessNameLine1Txt',
-    'irs:USAddress/irs:AddressLine1',
-    'irs:USAddress/irs:AddressLine1Txt',
-    'irs:USAddress/irs:City',
-    'irs:USAddress/irs:CityNm',
-    'irs:USAddress/irs:State',
-    'irs:USAddress/irs:StateAbbreviationCd',
-    'irs:USAddress/irs:ZIPCode',
-    'irs:USAddress/irs:ZIPCd',
-    'irs:RecipientEIN',
-    'irs:IRCSectionDesc',
-    'irs:CashGrantAmt',
-    'irs:NonCashAssistanceAmt',
-    'irs:ValuationMethodUsedDesc',
-    'irs:PurposeOfGrantTxt',
-    'irs:RecipientNameBusiness/irs:BusinessNameLine1',
-    'irs:AddressUS/AddressLine1',
-    'irs:AddressUS/irs:City',
-    'irs:AddressUS/irs:State',
-    'irs:AddressUS/irs:ZIPCode',
-    'irs:EINOfRecipient',
-    'irs:IRCSectionDesc',
-    'irs:AmountOfCashGrant',
-    'irs:AmountofNonCashAssistance',
-    'irs:PurposeOfGrant',
-]
 
 def download_index_csv(year):
     url = f'https://apps.irs.gov/pub/epostcard/990/xml/{year}/index_{year}.csv'
@@ -266,7 +196,7 @@ def extract_index_data(year, form_type):
     if not os.path.exists(index_csv_path):
         index_csv_path = download_index_csv(year)
     
-    index_df = pd.read_csv(index_csv_path, nrows= 100)
+    index_df = pd.read_csv(index_csv_path)
 
     # Filter the index DataFrame to include only rows with the specified form type
     index_df = index_df[index_df['RETURN_TYPE'] == form_type]
@@ -324,22 +254,119 @@ def extract_index_data(year, form_type):
 
     return combined_df
 
+# Function to extract Schedule C data from XML
+def extract_schedule_c_data(year):
+    index_csv_path = f'data/index_file/index_{year}.csv'
+    
+    # Download the index CSV if it does not exist
+    if not os.path.exists(index_csv_path):
+        index_csv_path = download_index_csv(year)
+    
+    index_df = pd.read_csv(index_csv_path)
+
+    # Filter the index DataFrame to include only rows with the specified form type
+    index_df = index_df[index_df['RETURN_TYPE'] == '990']
+
+    xml_files_path_prefix = f'data/xml_files/{year}/'
+
+    # List to hold all extracted data that has non-empty Schedule C
+    valid_schedule_c_data = []
+
+    if year < 2024:
+        for _, row in index_df.iterrows():
+            xml_folder_path = f"{xml_files_path_prefix}"
+            xml_file = f"{xml_folder_path}{row['OBJECT_ID']}_public.xml"
+            
+            # Download and extract the ZIP file if the XML folder does not exist
+            if not os.path.exists(xml_folder_path):
+                download_and_extract_zip_legacy(xml_files_path_prefix, year)
+            
+            try:
+                # Extract data for each row
+                extracted_data = extract_variables_and_attr_from_xml(xml_file, schedule_c_variables)
+                
+                # Check if all Schedule C fields are empty
+                if any(value for key, value in extracted_data.items() if key in schedule_c_variables):
+                    # Combine index data and non-empty Schedule C data
+                    combined_data = row.to_dict()  # Convert index row to dictionary
+                    combined_data.update(extracted_data)  # Add non-empty Schedule C data
+                    valid_schedule_c_data.append(combined_data)  # Append to list
+                else:
+                    print(f"Skipping OBJECT_ID {row['OBJECT_ID']} due to empty Schedule C fields.")
+            except ET.ParseError:
+                print(f"Error parsing {xml_file}.")
+            except FileNotFoundError:
+                print(f"File {xml_file} not found.")
+    else:
+        for _, row in index_df.iterrows():
+            xml_folder_path = f"{xml_files_path_prefix}{row['XML_BATCH_ID']}/"
+            xml_file = f"{xml_folder_path}{row['OBJECT_ID']}_public.xml"
+            
+            # Download and extract the ZIP file if the XML folder does not exist
+            if not os.path.exists(xml_folder_path):
+                download_and_extract_zip(xml_files_path_prefix, row['XML_BATCH_ID'], year)
+            
+            try:
+                # Extract data for each row
+                extracted_data = extract_variables_and_attr_from_xml(xml_file, schedule_c_variables)
+                
+                # Check if all Schedule C fields are empty
+                if any(value for key, value in extracted_data.items() if key in schedule_c_variables):
+                    # Combine index data and non-empty Schedule C data
+                    combined_data = row.to_dict()  # Convert index row to dictionary
+                    combined_data.update(extracted_data)  # Add non-empty Schedule C data
+                    valid_schedule_c_data.append(combined_data)  # Append to list
+                else:
+                    print(f"Skipping OBJECT_ID {row['OBJECT_ID']} due to empty Schedule C fields.")
+            except ET.ParseError:
+                print(f"Error parsing {xml_file}.")
+            except FileNotFoundError:
+                print(f"File {xml_file} not found.")
+    
+    # Create a DataFrame from the list of dictionaries
+    valid_schedule_c_df = pd.DataFrame(valid_schedule_c_data)
+
+    # Remove the "irs:" prefix from the column names
+    valid_schedule_c_df.columns = [col.replace('irs:', '') for col in valid_schedule_c_df.columns]
+
+    output_schedule_c_csv_path = f'result/{year}/schedule_c_{year}.csv'
+
+    if not os.path.exists(os.path.dirname(output_schedule_c_csv_path)):
+        os.makedirs(os.path.dirname(output_schedule_c_csv_path))
+
+    valid_schedule_c_df.to_csv(output_schedule_c_csv_path, index=False)
+
+    print(f"Schedule C data extraction completed. Output saved to {output_schedule_c_csv_path}.")
+
+
+
 # Function to extract recipient table from XML
 def extract_recipient_table(xml_file, object_id, recipient_variables):
     tree = ET.parse(xml_file)
     root = tree.getroot()
     
     recipient_data = []
+    # Find all elements that match the XPath for recipient tables
     recipient_elements = root.findall('.//irs:RecipientTable', ns)
     
     for element in recipient_elements:
         recipient = {'OBJECT_ID': object_id}
         for var in recipient_variables:
+            # Remove '/text()' from the variable
             xpath_expr = var.replace('/text()', '')
+
+            # Split the XPath expression and prepend 'irs:' to each part
+            xpath_parts = xpath_expr.split('/')
+            # Apply the 'irs:' prefix only to the actual XML elements
+            xpath_expr = '/'.join('irs:' + part for part in xpath_parts if part)
+
+            #print(xpath_expr)  # Debugging statement to verify the XPath expression
+            
             recipient[var] = element.findtext(xpath_expr, default='', namespaces=ns)
         recipient_data.append(recipient)
     
     return recipient_data
+
 
 def extract_recipient_data(year):
     index_csv_path = f'data/index_file/index_{year}.csv'
@@ -404,7 +431,7 @@ def extract_recipient_data(year):
     print(f"Recipient data extraction completed. Output saved to {output_recipient_csv_path}.")
 
 
-def main(year, form_type, recipient):
+def main(year, form_type, recipient, schedule):
     if year < 2018:
         raise ValueError("Year must be 2018 or later. IRS does not have data before 2018.")
     if form_type != '990':
@@ -412,8 +439,10 @@ def main(year, form_type, recipient):
 
     if recipient:
         extract_recipient_data(year)
-    else:
+    elif schedule == '':
         extract_index_data(year, form_type)
+    elif schedule == 'C':
+        extract_schedule_c_data(year)
 
 
 if __name__ == "__main__":
@@ -421,7 +450,9 @@ if __name__ == "__main__":
     parser.add_argument('--year', type=int, default=2024, help='The year of the data to process.')
     parser.add_argument('--form', type=str, default='990', help='The IRS form type to process.')
     parser.add_argument('--recipient', action='store_true', default=False, help='Extract recipient organization data.')
+    parser.add_argument('--schedule', type=str, default='', help='The schedule to extract, default is the index data.')
+
 
     args = parser.parse_args()
 
-    main(args.year, args.form, args.recipient)
+    main(args.year, args.form, args.recipient, args.schedule)
