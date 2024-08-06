@@ -1,4 +1,5 @@
-﻿ReturnHeader/Filer/EIN/text()
+﻿Variables
+ReturnHeader/Filer/EIN/text()
 ReturnHeader/Filer/BusinessName/BusinessNameLine1/text()
 ReturnHeader/Filer/BusinessName/BusinessNameLine2/text()
 ReturnHeader/TaxYr/text()
