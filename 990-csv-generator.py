@@ -196,18 +196,18 @@ def extract_index_data(year, form_type):
     if not os.path.exists(index_csv_path):
         index_csv_path = download_index_csv(year)
     
-    index_df = pd.read_csv(index_csv_path)
+    index_df = pd.read_csv(index_csv_path, nrows= 150)
 
     # Filter the index DataFrame to include only rows with the specified form type
     index_df = index_df[index_df['RETURN_TYPE'] == form_type]
 
-    # Create a DataFrame to hold the combined data
-    combined_df = index_df.copy()
-
     xml_files_path_prefix = f'data/xml_files/{year}/'
 
+    # List to hold all extracted data
+    all_extracted_data = []
+
     if year < 2024:
-        for index, row in index_df.iterrows():
+        for _, row in index_df.iterrows():
             xml_folder_path = f"{xml_files_path_prefix}"
             xml_file = f"{xml_folder_path}{row['OBJECT_ID']}_public.xml"
             
@@ -217,14 +217,16 @@ def extract_index_data(year, form_type):
             
             try:
                 extracted_data = extract_variables_and_attr_from_xml(xml_file, all_variables)
-                for var, value in extracted_data.items():
-                    combined_df.at[index, var] = value
+                # Combine index data and extracted data
+                combined_data = row.to_dict()  # Convert index row to dictionary
+                combined_data.update(extracted_data)  # Add extracted data
+                all_extracted_data.append(combined_data)  # Append to list
             except ET.ParseError:
                 print(f"Error parsing {xml_file}.")
             except FileNotFoundError:
                 print(f"File {xml_file} not found.")
     else:
-        for index, row in index_df.iterrows():
+        for _, row in index_df.iterrows():
             xml_folder_path = f"{xml_files_path_prefix}{row['XML_BATCH_ID']}/"
             xml_file = f"{xml_folder_path}{row['OBJECT_ID']}_public.xml"
             
@@ -234,13 +236,18 @@ def extract_index_data(year, form_type):
             
             try:
                 extracted_data = extract_variables_and_attr_from_xml(xml_file, all_variables)
-                for var, value in extracted_data.items():
-                    combined_df.at[index, var] = value
+                # Combine index data and extracted data
+                combined_data = row.to_dict()  # Convert index row to dictionary
+                combined_data.update(extracted_data)  # Add extracted data
+                all_extracted_data.append(combined_data)  # Append to list
             except ET.ParseError:
                 print(f"Error parsing {xml_file}.")
             except FileNotFoundError:
                 print(f"File {xml_file} not found.")
     
+    # Create a DataFrame from the list of dictionaries
+    combined_df = pd.DataFrame(all_extracted_data)
+
     # Remove the "irs:" prefix from the column names
     combined_df.columns = [col.replace('irs:', '') for col in combined_df.columns]
 
@@ -253,6 +260,7 @@ def extract_index_data(year, form_type):
     print(f"Data extraction completed. Output saved to {output_csv_path}.")
 
     return combined_df
+
 
 # Function to extract Schedule C data from XML
 def extract_schedule_c_data(year):
