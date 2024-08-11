@@ -1,7 +1,7 @@
 ﻿Variables
 ReturnHeader/Filer/EIN/text()
-ReturnHeader/Filer/BusinessName/BusinessNameLine1/text()
-ReturnHeader/Filer/BusinessName/BusinessNameLine2/text()
+ReturnHeader/Filer/BusinessName/BusinessNameLine1Txt/text()
+ReturnHeader/Filer/BusinessName/BusinessNameLine2Txt/text()
 ReturnHeader/TaxYr/text()
 ReturnData/IRS990/ActivityOrMissionDesc/text()
 ReturnData/IRS990/MissionDesc/text()
