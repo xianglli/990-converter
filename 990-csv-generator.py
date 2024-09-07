@@ -69,6 +69,7 @@ def download_index_csv(year):
 def download_and_extract_zip(xml_files_path_prefix, xml_batch_id, year):
     zip_url = f'https://apps.irs.gov/pub/epostcard/990/xml/{year}/{xml_batch_id}.zip'
     local_zip_path = f'{xml_files_path_prefix}{xml_batch_id}.zip'
+    log_file = 'duplicate_log.txt'
     
     if not os.path.exists(xml_files_path_prefix):
         os.makedirs(xml_files_path_prefix)
@@ -82,8 +83,23 @@ def download_and_extract_zip(xml_files_path_prefix, xml_batch_id, year):
     xml_files_path = f'{xml_files_path_prefix}{xml_batch_id}/'
     
     try:
-        subprocess.run(['unzip', local_zip_path, '-d', xml_files_path], check=True)
+        # The '-o' option in unzip forces overwriting of files without prompting.
+        # We also capture the output and error messages.
+        result = subprocess.run(
+            ['unzip', '-o', local_zip_path, '-d', xml_files_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+        )
+
+        # Check for duplicate files in the output
+        with open(log_file, 'a') as log:
+            for line in result.stdout.splitlines():
+                if 'replacing' in line:
+                    log.write(f"Duplicate file: {line}\n")
+                    log.write(f"Zip file: {local_zip_path}\n")
+    
     except subprocess.CalledProcessError as e:
+        with open(log_file, 'a') as log:
+            log.write(f"Error extracting {local_zip_path}: {e.stderr}\n")
         print(f"Error extracting {local_zip_path}: {e}")
     
     print(f"Downloaded and extracted {xml_batch_id}.zip.")
@@ -196,7 +212,7 @@ def extract_index_data(year, form_type):
     if not os.path.exists(index_csv_path):
         index_csv_path = download_index_csv(year)
     
-    index_df = pd.read_csv(index_csv_path, nrows= 150)
+    index_df = pd.read_csv(index_csv_path)
 
     # Filter the index DataFrame to include only rows with the specified form type
     index_df = index_df[index_df['RETURN_TYPE'] == form_type]
